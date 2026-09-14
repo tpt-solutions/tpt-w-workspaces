@@ -1,0 +1,7 @@
+Advanced Virtual Desktop & Workspace Manager (tpt-workspaces)
+The Problem: Windows Virtual Desktops are dumb (they don't remember app assignments). Linux DEs (GNOME/KDE) have better workspaces, but lack deep state-management.
+The TPT Solution: Persistent workspaces that automatically move specific apps to specific desktops, remember window geometries, and pause background apps.
+
+Compatible on Windows, Linux and Archon. https://github.com/tpt-solutions/tpt-archon
+
+🐧 Linux & Archon Compatibility: Uses Wayland protocols to enforce window placement on Linux. On Archon, workspaces are essentially different capability domains. tpt-workspaces can completely freeze the state (memory and CPU context) of apps in inactive workspaces using microkernel task-suspension, freeing up massive amounts of RAM and CPU for the active workspace.

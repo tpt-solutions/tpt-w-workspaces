@@ -1,0 +1,17 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env/config
+.env
+*.local

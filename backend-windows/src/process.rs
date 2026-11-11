@@ -8,14 +8,17 @@
 //! Resuming decrements each thread's suspend count until it reaches zero, so
 //! the operation is safe to repeat.
 
+use std::ffi::c_void;
 use std::mem::size_of;
 
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
+    GetCurrentProcessId, OpenProcess, OpenProcessToken, OpenThread, ResumeThread, SuspendThread,
+    PROCESS_QUERY_LIMITED_INFORMATION, THREAD_SUSPEND_RESUME,
 };
 
 use crate::error::BackendError;
@@ -23,6 +26,28 @@ use crate::window::HandleGuard;
 
 /// Processes that must never be frozen: the System Idle process and the System process.
 const PROTECTED_PIDS: &[u32] = &[0, 4];
+
+/// Whether `pid` runs with an elevated token. `None` if the token cannot be read.
+pub fn is_elevated(pid: u32) -> Option<bool> {
+    unsafe {
+        let process = HandleGuard(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?);
+        let mut token = HANDLE::default();
+        OpenProcessToken(process.0, TOKEN_QUERY, &mut token).ok()?;
+        let token = HandleGuard(token);
+
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut returned = 0u32;
+        GetTokenInformation(
+            token.0,
+            TokenElevation,
+            Some(&mut elevation as *mut TOKEN_ELEVATION as *mut c_void),
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut returned,
+        )
+        .ok()?;
+        Some(elevation.TokenIsElevated != 0)
+    }
+}
 
 fn check_pid(pid: u32) -> Result<(), BackendError> {
     if PROTECTED_PIDS.contains(&pid) {
@@ -34,6 +59,18 @@ fn check_pid(pid: u32) -> Result<(), BackendError> {
         return Err(BackendError::Refused(
             "refusing to suspend tpt-workspaces itself".into(),
         ));
+    }
+    Ok(())
+}
+
+/// An elevated process cannot be suspended by a non-elevated caller, and the
+/// attempt would fail on every window event. Report it once, clearly, instead.
+fn check_suspendable(pid: u32) -> Result<(), BackendError> {
+    let self_elevated = is_elevated(unsafe { GetCurrentProcessId() }) == Some(true);
+    if !self_elevated && is_elevated(pid) == Some(true) {
+        return Err(BackendError::Refused(format!(
+            "pid {pid} is elevated; run tpt-workspaces as administrator to pause it"
+        )));
     }
     Ok(())
 }
@@ -74,6 +111,7 @@ fn open_thread(tid: u32) -> Result<HandleGuard, windows::core::Error> {
 /// if the process has no threads or none of them could be suspended.
 pub fn suspend_process(pid: u32) -> Result<usize, BackendError> {
     check_pid(pid)?;
+    check_suspendable(pid)?;
     let ids = thread_ids(pid)?;
     if ids.is_empty() {
         return Err(BackendError::NotFound(format!("no threads for pid {pid}")));

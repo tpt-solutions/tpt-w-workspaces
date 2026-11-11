@@ -1,0 +1,2 @@
+# Minimal sway config for headless CI runs. No bar, no keybindings.
+output * resolution 1280x800

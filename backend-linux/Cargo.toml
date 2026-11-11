@@ -1,0 +1,18 @@
+[package]
+name = "tpt-workspaces-backend-linux"
+description = "tpt-workspaces: Linux backend for wlroots compositors (sway IPC)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tpt-workspaces-core = { path = "../core" }
+
+# The crate is Linux-only; these are only fetched and built on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+serde_json = "1"
+thiserror = "2"

@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+  linux-sway:
+    name: Linux integration (headless sway)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install sway and foot
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sway foot
+
+      - name: Start headless sway
+        run: |
+          RUNTIME="$RUNNER_TEMP/xdg"
+          mkdir -p "$RUNTIME" && chmod 700 "$RUNTIME"
+          XDG_RUNTIME_DIR="$RUNTIME" \
+          WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
+          LIBSEAT_BACKEND=noop \
+            nohup sway -c ci/sway-config > "$RUNNER_TEMP/sway.log" 2>&1 &
+          SOCK=""; WL=""
+          for _ in $(seq 1 100); do
+            SOCK=$(ls "$RUNTIME"/sway-ipc.*.sock 2>/dev/null | head -1)
+            WL=$(ls "$RUNTIME" 2>/dev/null | grep -E '^wayland-[0-9]+$' | head -1)
+            if [ -n "$SOCK" ] && [ -n "$WL" ]; then break; fi
+            sleep 0.2
+          done
+          if [ -z "$SOCK" ] || [ -z "$WL" ]; then
+            echo "sway did not start"; cat "$RUNNER_TEMP/sway.log"; exit 1
+          fi
+          echo "XDG_RUNTIME_DIR=$RUNTIME" >> "$GITHUB_ENV"
+          echo "SWAYSOCK=$SOCK" >> "$GITHUB_ENV"
+          echo "WAYLAND_DISPLAY=$WL" >> "$GITHUB_ENV"
+
+      - name: Integration tests against sway
+        run: cargo test -p tpt-workspaces-backend-linux -- --ignored --test-threads=1
+
+      - name: Show sway log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/sway.log" || true

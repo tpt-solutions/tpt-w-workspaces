@@ -1,0 +1,24 @@
+[package]
+name = "tpt-workspaces-core"
+description = "Platform-agnostic domain model, rule matching, state transitions and storage for tpt-workspaces"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+thiserror = "2"
+tracing = "0.1"
+notify = { version = "8", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+
+[features]
+default = []
+# Live-reload of the TOML config file via filesystem notifications.
+watch = ["dep:notify"]
+# SQLite-backed implementation of `storage::StateStore`.
+sqlite = ["dep:rusqlite"]

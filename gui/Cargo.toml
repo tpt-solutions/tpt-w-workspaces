@@ -9,4 +9,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+eframe = "0.31"
 tpt-workspaces-core = { path = "../core" }
+tray-icon = "0.19"

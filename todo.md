@@ -48,9 +48,9 @@ MIT OR Apache-2.0 (TPT Solutions).
 - [x] Structured logging
 
 ## Phase 6 — Tray Icon + Settings GUI (`gui` crate)
-- [ ] Tray icon with quick actions (pause/resume all, open settings, quit) — partial: show status, pause background apps, resume all and quit done; open settings pending
-- [ ] Settings window: manage workspaces, add/edit app-assignment rules — partial: the config is edited as text with validate and validated save; structured editing pending
-- [ ] Settings window: view/edit saved window geometries — partial: view done; editing pending
+- [x] Tray icon with quick actions (pause/resume all, open settings, quit)
+- [ ] Settings window: manage workspaces, add/edit app-assignment rules — partial: the config is edited as text, with validate, validated save and add-workspace/add-rule templates; a structured form is pending
+- [ ] Settings window: view/edit saved window geometries — partial: view and forget done; editing a position pending
 - [x] Live status view (which apps are paused, which workspace is active)
 - [x] Wire GUI to daemon (local IPC — pick mechanism: named pipe/unix socket)
 

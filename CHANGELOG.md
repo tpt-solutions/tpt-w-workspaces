@@ -19,8 +19,11 @@ All notable changes to tpt-workspaces are recorded here. The format follows
 - Settings tab in the GUI: edit the config as text, validate it, and save. Invalid
   text is never written, and the daemon reloads a saved file automatically.
   Remembered window positions are listed below the editor.
+  Each remembered position can be forgotten, and "Add workspace" and "Add rule"
+  append templates to the editor.
 - `TPT_WORKSPACES_CONFIG` and `TPT_WORKSPACES_STATE` override the config and
   state file locations.
+- Tray menu item "Open settings" opens the window on the Settings tab.
 - Windows MSI installer (`cargo wix`) and a Debian package (`cargo deb`) in the
   release workflow.
 - `tpt-workspaces pause` freezes background apps (rule-matched windows on other

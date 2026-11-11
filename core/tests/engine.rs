@@ -440,3 +440,28 @@ fn resume_all_keeps_a_process_it_could_not_resume() {
         vec![(50, "slack.exe".to_string())]
     );
 }
+
+#[test]
+fn leaving_an_unmanaged_desktop_does_not_freeze_its_apps() {
+    // The daemon starts on the user's own desktop, which the config does not name.
+    let mut backend = base_backend();
+    backend.current = Some(WorkspaceId::new("d-personal"));
+    backend.windows = vec![
+        // An app on the user's own desktop. Nothing manages it.
+        win(1, 70, "code.exe", "d-personal"),
+        // A rule-matched window on the managed "chat" workspace.
+        win(2, 71, "slack.exe", "ws-1"),
+    ];
+    let mut engine = start(backend, MemoryStore::default());
+
+    engine
+        .handle(Event::WorkspaceFocused(WorkspaceId::new("ws-1")))
+        .unwrap();
+
+    assert!(
+        !engine.backend().suspended.contains(&70),
+        "an app on the unmanaged desktop was frozen: {:?}",
+        engine.backend().suspended
+    );
+    assert_eq!(engine.state().active, Some(WorkspaceId::new("ws-1")));
+}

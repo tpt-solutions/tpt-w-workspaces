@@ -383,6 +383,13 @@ impl<B: DesktopBackend, S: StateStore> Engine<B, S> {
             }
         }
 
+        // Only a managed workspace can be left behind. The desktop the daemon
+        // started on is not one of them, so its apps are never frozen.
+        if let Some(active) = &self.state.active {
+            if !self.desktops.values().any(|managed| managed == active) {
+                self.state.active = None;
+            }
+        }
         let outgoing = self.state.active.clone();
         let actions = plan_switch(&mut self.state, &target, windows, &self.geometry);
         let failures = execute_best_effort(&mut self.backend, &actions, &mut self.geometry);

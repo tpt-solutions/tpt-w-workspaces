@@ -24,6 +24,8 @@ All notable changes to tpt-workspaces are recorded here. The format follows
 - `TPT_WORKSPACES_CONFIG` and `TPT_WORKSPACES_STATE` override the config and
   state file locations.
 - Tray menu item "Open settings" opens the window on the Settings tab.
+- Settings form: workspaces and rules are edited as fields and written to the
+  config text on Apply. Applying rewrites the text, so comments are not kept.
 - Windows MSI installer (`cargo wix`) and a Debian package (`cargo deb`) in the
   release workflow.
 - `tpt-workspaces pause` freezes background apps (rule-matched windows on other

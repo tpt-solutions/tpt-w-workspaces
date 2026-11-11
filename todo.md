@@ -49,7 +49,7 @@ MIT OR Apache-2.0 (TPT Solutions).
 
 ## Phase 6 — Tray Icon + Settings GUI (`gui` crate)
 - [x] Tray icon with quick actions (pause/resume all, open settings, quit)
-- [ ] Settings window: manage workspaces, add/edit app-assignment rules — partial: the config is edited as text, with validate, validated save and add-workspace/add-rule templates; a structured form is pending
+- [x] Settings window: manage workspaces, add/edit app-assignment rules
 - [ ] Settings window: view/edit saved window geometries — partial: view and forget done; editing a position pending
 - [x] Live status view (which apps are paused, which workspace is active)
 - [x] Wire GUI to daemon (local IPC — pick mechanism: named pipe/unix socket)

@@ -7,6 +7,8 @@
 //! The window never talks to the daemon directly. A slow or hung daemon must
 //! not freeze the UI, so requests happen on the poller's thread.
 
+pub mod settings;
+
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;

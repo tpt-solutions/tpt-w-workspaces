@@ -15,6 +15,8 @@ use std::time::Duration;
 
 use eframe::egui;
 use tpt_workspaces_core::ipc::{Request, Status};
+use tpt_workspaces_core::paths;
+use tpt_workspaces_gui::settings::Settings;
 use tpt_workspaces_gui::{run_action, summary, Connection, SharedState};
 use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -57,9 +59,18 @@ fn spawn_action(ctx: egui::Context, feedback: Feedback, request: Request, done: 
     });
 }
 
+/// Which page of the window is showing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Tab {
+    Status,
+    Settings,
+}
+
 struct App {
     state: SharedState,
     feedback: Feedback,
+    tab: Tab,
+    settings: Settings,
     _tray: TrayIcon,
 }
 
@@ -127,6 +138,8 @@ impl App {
         Ok(App {
             state,
             feedback,
+            tab: Tab::Status,
+            settings: Settings::open(paths::config_file(), paths::state_file()),
             _tray: tray,
         })
     }
@@ -186,42 +199,48 @@ impl eframe::App for App {
             ui.heading("tpt-workspaces");
             ui.label(summary(&connection));
             ui.separator();
-            match &connection {
-                Connection::Connecting => {
-                    ui.spinner();
-                }
-                Connection::Offline(message) => {
-                    ui.colored_label(
-                        egui::Color32::GRAY,
-                        "The daemon is not running or not answering.",
-                    );
-                    ui.small(message);
-                    ui.add_space(8.0);
-                    ui.small("Start it with: tpt-workspaces run");
-                }
-                Connection::Connected(status) => {
-                    show_status(ui, status);
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        if ui.button("Pause background apps").clicked() {
-                            spawn_action(
-                                ctx.clone(),
-                                self.feedback.clone(),
-                                Request::PauseBackground,
-                                "paused",
-                            );
-                        }
-                        if ui.button("Resume all").clicked() {
-                            spawn_action(
-                                ctx.clone(),
-                                self.feedback.clone(),
-                                Request::ResumeAll,
-                                "resumed",
-                            );
-                        }
-                    });
-                    if let Some(message) = &feedback {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.tab, Tab::Status, "Status");
+                ui.selectable_value(&mut self.tab, Tab::Settings, "Settings");
+            });
+            ui.add_space(4.0);
+            if self.tab == Tab::Settings {
+                show_settings(ui, &mut self.settings);
+            } else {
+                match &connection {
+                    Connection::Connecting => {
+                        ui.spinner();
+                    }
+                    Connection::Offline(message) => {
+                        ui.colored_label(MUTED, "The daemon is not running or not answering.");
                         ui.small(message);
+                        ui.add_space(8.0);
+                        ui.small("Start it with: tpt-workspaces run");
+                    }
+                    Connection::Connected(status) => {
+                        show_status(ui, status);
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Pause background apps").clicked() {
+                                spawn_action(
+                                    ctx.clone(),
+                                    self.feedback.clone(),
+                                    Request::PauseBackground,
+                                    "paused",
+                                );
+                            }
+                            if ui.button("Resume all").clicked() {
+                                spawn_action(
+                                    ctx.clone(),
+                                    self.feedback.clone(),
+                                    Request::ResumeAll,
+                                    "resumed",
+                                );
+                            }
+                        });
+                        if let Some(message) = &feedback {
+                            ui.small(message);
+                        }
                     }
                 }
             }
@@ -229,6 +248,76 @@ impl eframe::App for App {
 
         // Keep the window's state fresh even when the poller has nothing new.
         ctx.request_repaint_after(POLL_INTERVAL);
+    }
+}
+
+const ACCENT: egui::Color32 = egui::Color32::from_rgb(29, 78, 216);
+const ERROR: egui::Color32 = egui::Color32::from_rgb(185, 28, 28);
+const SUCCESS: egui::Color32 = egui::Color32::from_rgb(21, 128, 61);
+/// Secondary text. Meets WCAG AA contrast (4.5:1) on a light background.
+const MUTED: egui::Color32 = egui::Color32::from_rgb(95, 95, 95);
+
+fn show_settings(ui: &mut egui::Ui, settings: &mut Settings) {
+    ui.horizontal(|ui| {
+        if ui.button("Validate").clicked() {
+            settings.validate();
+        }
+        if ui
+            .add_enabled(settings.dirty(), egui::Button::new("Save"))
+            .clicked()
+        {
+            settings.save();
+        }
+        if ui
+            .add_enabled(settings.dirty(), egui::Button::new("Revert"))
+            .clicked()
+        {
+            settings.reload();
+        }
+        if settings.dirty() {
+            ui.small("Unsaved changes");
+        }
+    });
+    if let Some((is_error, message)) = &settings.message {
+        ui.colored_label(if *is_error { ERROR } else { SUCCESS }, message);
+    }
+    ui.add(
+        egui::TextEdit::multiline(&mut settings.text)
+            .code_editor()
+            .desired_rows(12)
+            .desired_width(f32::INFINITY),
+    );
+
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.strong("Remembered window positions");
+        if ui.small_button("Refresh").clicked() {
+            settings.refresh_geometries();
+        }
+    });
+    if let Some(error) = &settings.geometry_error {
+        ui.colored_label(ERROR, error);
+    } else if settings.geometries.is_empty() {
+        ui.small("None saved yet.");
+    } else {
+        egui::ScrollArea::vertical()
+            .max_height(120.0)
+            .show(ui, |ui| {
+                egui::Grid::new("geometries").striped(true).show(ui, |ui| {
+                    ui.strong("Workspace");
+                    ui.strong("App");
+                    ui.strong("Position");
+                    ui.strong("Size");
+                    ui.end_row();
+                    for (key, geometry) in &settings.geometries {
+                        ui.label(key.workspace.as_str());
+                        ui.label(&key.executable);
+                        ui.label(format!("{}, {}", geometry.x, geometry.y));
+                        ui.label(format!("{} × {}", geometry.width, geometry.height));
+                        ui.end_row();
+                    }
+                });
+            });
     }
 }
 
@@ -242,7 +331,7 @@ fn show_status(ui: &mut egui::Ui, status: &Status) {
     for ws in &status.workspaces {
         let text = format!("{} ({})", ws.name, ws.id);
         if ws.active {
-            ui.colored_label(egui::Color32::from_rgb(59, 130, 246), format!("● {text}"));
+            ui.colored_label(ACCENT, format!("● {text}"));
         } else {
             ui.label(format!("  {text}"));
         }

@@ -7,6 +7,7 @@
 pub mod backend;
 pub mod config;
 pub mod engine;
+pub mod ipc;
 pub mod model;
 pub mod rules;
 pub mod storage;

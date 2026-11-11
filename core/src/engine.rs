@@ -130,6 +130,54 @@ impl<B: DesktopBackend, S: StateStore> Engine<B, S> {
         }
     }
 
+    /// Freezes the processes of rule-matched windows that are on a workspace other
+    /// than the active one. Returns how many processes were newly frozen.
+    pub fn pause_background(&mut self) -> Result<usize, EngineError> {
+        let windows = self.list_windows()?;
+        let before = self.paused.len();
+        for window in &windows {
+            let Some(workspace) = &window.workspace else {
+                continue; // unknown workspace: not provably in the background
+            };
+            if self.state.active.as_ref() == Some(workspace) {
+                continue;
+            }
+            if match_window(&self.rules, window).is_none() {
+                continue;
+            }
+            self.freeze_if_background(window.pid, &window.executable, &windows)?;
+        }
+        Ok(self.paused.len() - before)
+    }
+
+    /// Resumes every process the engine has frozen. Background windows are frozen
+    /// again on their next event, or by [`Engine::pause_background`].
+    /// Returns how many processes were resumed.
+    pub fn resume_all(&mut self) -> Result<usize, EngineError> {
+        let pids: Vec<u32> = self.paused.keys().copied().collect();
+        let mut resumed = 0;
+        for pid in pids {
+            match self.backend.resume_process(pid) {
+                Ok(()) => {
+                    self.paused.remove(&pid);
+                    self.state.paused_pids.remove(&pid);
+                    resumed += 1;
+                }
+                Err(e) => warn!(pid, error = %e, "could not resume process"),
+            }
+        }
+        self.persist_paused()?;
+        Ok(resumed)
+    }
+
+    /// Processes the engine currently holds frozen, with their executable names.
+    pub fn paused_processes(&self) -> Vec<(u32, String)> {
+        self.paused
+            .iter()
+            .map(|(pid, exe)| (*pid, exe.clone()))
+            .collect()
+    }
+
     pub fn backend(&self) -> &B {
         &self.backend
     }

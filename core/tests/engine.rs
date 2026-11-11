@@ -373,3 +373,70 @@ fn workspace_focus_event_switches_even_when_the_workspace_is_empty() {
     assert_eq!(engine.state().active, Some(chat));
     assert_eq!(engine.backend().suspended, vec![10]);
 }
+
+#[test]
+fn pause_background_freezes_only_matched_windows_on_other_workspaces() {
+    let mut backend = base_backend();
+    backend.windows = vec![
+        // Matches the rule, lives on the inactive "chat" workspace: frozen.
+        win(1, 50, "slack.exe", "ws-1"),
+        // Matches the rule but is on the active workspace: left alone.
+        win(2, 51, "slack.exe", "d-dev"),
+        // Not matched by any rule: left alone even though it is in the background.
+        win(3, 52, "notepad.exe", "ws-1"),
+    ];
+    let mut engine = start(backend, MemoryStore::default());
+
+    let count = engine.pause_background().unwrap();
+
+    assert_eq!(count, 1);
+    assert_eq!(engine.backend().suspended, vec![50]);
+    assert_eq!(
+        engine.paused_processes(),
+        vec![(50, "slack.exe".to_string())]
+    );
+}
+
+#[test]
+fn pause_background_skips_windows_with_unknown_workspace() {
+    let mut backend = base_backend();
+    let mut window = win(1, 50, "slack.exe", "ws-1");
+    window.workspace = None;
+    backend.windows = vec![window];
+    let mut engine = start(backend, MemoryStore::default());
+
+    assert_eq!(engine.pause_background().unwrap(), 0);
+    assert!(engine.backend().suspended.is_empty());
+}
+
+#[test]
+fn resume_all_resumes_every_frozen_process_and_clears_state() {
+    let mut backend = base_backend();
+    backend.windows = vec![win(1, 50, "slack.exe", "ws-1")];
+    let mut engine = start(backend, MemoryStore::default());
+    engine.pause_background().unwrap();
+
+    assert_eq!(engine.resume_all().unwrap(), 1);
+    assert_eq!(engine.backend().resumed, vec![50]);
+    assert!(engine.state().paused_pids.is_empty());
+    assert!(engine.paused_processes().is_empty());
+
+    // Nothing left to resume the second time.
+    assert_eq!(engine.resume_all().unwrap(), 0);
+}
+
+#[test]
+fn resume_all_keeps_a_process_it_could_not_resume() {
+    let mut backend = base_backend();
+    backend.windows = vec![win(1, 50, "slack.exe", "ws-1")];
+    backend.fail_resume.insert(50);
+    let mut engine = start(backend, MemoryStore::default());
+    engine.pause_background().unwrap();
+
+    assert_eq!(engine.resume_all().unwrap(), 0);
+    assert!(engine.state().paused_pids.contains(&50));
+    assert_eq!(
+        engine.paused_processes(),
+        vec![(50, "slack.exe".to_string())]
+    );
+}

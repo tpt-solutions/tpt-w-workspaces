@@ -34,11 +34,11 @@ MIT OR Apache-2.0 (TPT Solutions).
 - [x] Handle edge cases: multi-window apps, elevated processes, UWP apps
 
 ## Phase 4 — Linux Backend (`backend-linux`, Wayland)
-- [ ] Implement Wayland protocol client for window placement (research and pick protocol(s) usable across GNOME/KDE, e.g. `wlr-foreign-toplevel-management`, or compositor-specific extensions where needed)
-- [ ] Enumerate/create workspaces via compositor-specific integration (GNOME Shell extension / KDE scripting interface, since no universal Wayland workspace-switch protocol exists)
-- [ ] Move windows to target workspace based on matched `AppRule`
-- [ ] Save/restore window geometry per workspace
-- [ ] Implement app pause/resume via `SIGSTOP`/`SIGCONT` or cgroup freezer
+- [ ] Implement Wayland protocol client for window placement — superseded by D2: placement uses sway IPC; GNOME/KDE deferred to post-v1 (see `docs/decisions.md`, `docs/linux-support.md`)
+- [ ] Enumerate/create workspaces via compositor-specific integration — sway implemented (via IPC, CI-tested); GNOME and KDE deferred to post-v1 (D2)
+- [ ] Move windows to target workspace based on matched `AppRule` — sway implemented (CI-tested); GNOME and KDE deferred (D2)
+- [ ] Save/restore window geometry per workspace — sway implemented (CI-tested); GNOME and KDE deferred (D2)
+- [ ] Implement app pause/resume via `SIGSTOP`/`SIGCONT` or cgroup freezer — sway implemented with `SIGSTOP`/`SIGCONT` (CI-tested); cgroup freezer not used
 - [x] Document GNOME vs KDE support matrix/limitations
 
 ## Phase 5 — Background Service / Daemon
@@ -56,17 +56,17 @@ MIT OR Apache-2.0 (TPT Solutions).
 
 ## Phase 7 — Packaging & Distribution
 - [ ] Windows installer (MSI/EXE via e.g. `cargo-wix` or WiX directly) — partial: MSI builds and its files verified by administrative extract; install and uninstall not yet tested; release workflow step added
-- [ ] Linux packaging: `.deb`, `.rpm`, and/or Flatpak — partial: `.deb` metadata written and release step added, not yet built on Linux; no `.rpm` or Flatpak
+- [ ] Linux packaging: `.deb`, `.rpm`, and/or Flatpak — `.rpm` and Flatpak deferred; partial: `.deb` metadata written and release step added, not yet built on Linux; no `.rpm` or Flatpak
 - [x] Versioning & release process
-- [ ] Basic auto-update check (optional for v1)
+- [ ] Basic auto-update check (optional for v1) — deferred: not in v1 (D4)
 
 ## Phase 8 — Testing & Hardening
-- [ ] End-to-end manual test matrix (Windows 10/11, GNOME, KDE)
+- [ ] End-to-end manual test matrix (Windows 10/11, GNOME, KDE) — needs real hardware and sessions; Windows 11 partly exercised, GNOME and KDE deferred (D2, D5)
 - [x] Stress test with many workspaces/rules/windows
-- [ ] Handle multi-monitor setups
+- [ ] Handle multi-monitor setups — deferred until a multi-display machine is available for testing (D5)
 - [ ] Accessibility pass on GUI — partial: text colours meet WCAG AA contrast and no state is shown by colour alone; screen reader and keyboard-only passes pending
 
 ## Phase 9 — Stretch Goals (post-v1, not committed)
-- [ ] Working-set/RAM trim on suspend (Windows `EmptyWorkingSet`, Linux cgroup memory reclaim) in addition to thread suspension
-- [ ] Cloud sync of workspace config across machines
+- [ ] Working-set/RAM trim on suspend (Windows `EmptyWorkingSet`, Linux cgroup memory reclaim) in addition to thread suspension — Phase 9, unscheduled (D6)
+- [ ] Cloud sync of workspace config across machines — Phase 9, unscheduled (D6)
 - [ ] Archon integration — revisit once `tpt-archon` has a windowing/capability-domain API to integrate against; currently blocked, not scheduled

@@ -1,0 +1,105 @@
+# Copyright (c) 2026 TPT Solutions
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# Builds the CLI/daemon for Windows and Linux and attaches the archives to a
+# GitHub release. Runs when a version tag such as v0.2.0 is pushed. See
+# docs/releasing.md for the full procedure.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify-version:
+    name: Check tag matches Cargo version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare tag and workspace version
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests before packaging
+        run: cargo test --workspace --all-features --release
+
+      - name: Build release binary
+        run: cargo build -p tpt-workspaces-cli --release --locked
+
+      - name: Package
+        shell: bash
+        run: |
+          name="tpt-workspaces-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            cp target/release/tpt-workspaces.exe "dist/$name/"
+          else
+            cp target/release/tpt-workspaces "dist/$name/"
+          fi
+          cp README.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
+          cd dist
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a "$name.zip" "$name" >/dev/null
+          else
+            tar -czf "$name.tar.gz" "$name"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release with archives and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" \
+            --title "tpt-workspaces $GITHUB_REF_NAME" \
+            --generate-notes \
+            ./*

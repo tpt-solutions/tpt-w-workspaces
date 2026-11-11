@@ -1,0 +1,44 @@
+# Changelog
+
+All notable changes to tpt-workspaces are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+[Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+- `tpt-workspaces status` queries the running daemon over local IPC (named pipe
+  on Windows, Unix socket on Linux).
+- `tpt-workspaces --version`.
+- Stress test for the core engine with many workspaces, rules and windows.
+- Linux support matrix in `docs/linux-support.md`.
+- Release workflow that builds Windows and Linux archives on version tags.
+- `tpt-workspaces-gui`: status window and tray icon. Closing the window minimizes
+  it; the tray menu offers "Show status" and "Quit".
+- Local IPC lives in `core::ipc`, shared by the CLI and the GUI.
+- `tpt-workspaces pause` freezes background apps (rule-matched windows on other
+  workspaces); `tpt-workspaces resume` resumes every frozen app. The same actions
+  are in the GUI window and tray menu. A resumed app is frozen again on its next
+  window event if it is still in the background.
+- The status view lists frozen apps by name and PID.
+
+### Changed
+- The daemon refuses to start when another daemon is already running.
+- The IPC pipe on Windows is restricted to the current user.
+- Windows: elevated processes are reported as not pausable instead of failing
+  silently on every window event.
+- Sway: floating windows are sized before they are positioned, so the requested
+  top-left corner is kept.
+
+## [0.1.0]
+
+Initial development release. Not yet suitable for daily use.
+
+### Added
+- Core domain model, rule engine, workspace transitions, TOML config with live
+  reload, and SQLite state store.
+- Windows backend: virtual desktops (Windows 11 24H2+), window placement,
+  geometry restore, thread-level pause/resume, UWP window resolution.
+- Linux backend for sway (wlroots) via sway IPC.
+- `tpt-workspaces` CLI and daemon, with `check`, `run` and `autostart` commands.
+- Structured logging (`RUST_LOG`, `TPT_LOG_JSON=1`).

@@ -49,14 +49,14 @@ MIT OR Apache-2.0 (TPT Solutions).
 
 ## Phase 6 — Tray Icon + Settings GUI (`gui` crate)
 - [ ] Tray icon with quick actions (pause/resume all, open settings, quit) — partial: show status, pause background apps, resume all and quit done; open settings pending
-- [ ] Settings window: manage workspaces, add/edit app-assignment rules
-- [ ] Settings window: view/edit saved window geometries
+- [ ] Settings window: manage workspaces, add/edit app-assignment rules — partial: the config is edited as text with validate and validated save; structured editing pending
+- [ ] Settings window: view/edit saved window geometries — partial: view done; editing pending
 - [x] Live status view (which apps are paused, which workspace is active)
 - [x] Wire GUI to daemon (local IPC — pick mechanism: named pipe/unix socket)
 
 ## Phase 7 — Packaging & Distribution
-- [ ] Windows installer (MSI/EXE via e.g. `cargo-wix` or WiX directly)
-- [ ] Linux packaging: `.deb`, `.rpm`, and/or Flatpak
+- [ ] Windows installer (MSI/EXE via e.g. `cargo-wix` or WiX directly) — partial: MSI builds and its files verified by administrative extract; install and uninstall not yet tested; release workflow step added
+- [ ] Linux packaging: `.deb`, `.rpm`, and/or Flatpak — partial: `.deb` metadata written and release step added, not yet built on Linux; no `.rpm` or Flatpak
 - [x] Versioning & release process
 - [ ] Basic auto-update check (optional for v1)
 
@@ -64,7 +64,7 @@ MIT OR Apache-2.0 (TPT Solutions).
 - [ ] End-to-end manual test matrix (Windows 10/11, GNOME, KDE)
 - [x] Stress test with many workspaces/rules/windows
 - [ ] Handle multi-monitor setups
-- [ ] Accessibility pass on GUI
+- [ ] Accessibility pass on GUI — partial: text colours meet WCAG AA contrast and no state is shown by colour alone; screen reader and keyboard-only passes pending
 
 ## Phase 9 — Stretch Goals (post-v1, not committed)
 - [ ] Working-set/RAM trim on suspend (Windows `EmptyWorkingSet`, Linux cgroup memory reclaim) in addition to thread suspension

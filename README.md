@@ -84,7 +84,9 @@ for the GNOME and KDE status and the sway limitations.
 
 ## Installation
 
-Installers and packages are not yet available.
+Release archives, a Windows MSI and a Debian package are published on the
+[releases page](https://github.com/tpt-solutions/tpt-workspaces) when a version
+is tagged. See [docs/releasing.md](docs/releasing.md).
 
 ## License
 

@@ -35,9 +35,31 @@ Before 1.0.0, a MINOR bump may include breaking changes; note them in the change
 6. Check the release page, download one archive, and run
    `tpt-workspaces --version` on each platform.
 
+## Installers
+
+The release workflow builds two installers alongside the archives:
+
+- **Windows MSI** (`tpt-workspaces-<version>-x86_64.msi`), built with `cargo wix`
+  and WiX Toolset 3.14. It installs `tpt-workspaces.exe` and
+  `tpt-workspaces-gui.exe` to Program Files, adds a Start Menu shortcut for the
+  status window, and adds the install folder to PATH. It does not enable
+  autostart; run `tpt-workspaces autostart enable` for that.
+- **Debian package** (`tpt-workspaces_<version>_amd64.deb`), built with
+  `cargo deb`. The package's dependency list has not yet been checked on a
+  Linux machine.
+
+To build the MSI locally, install WiX Toolset 3.14 (it needs administrator
+rights and the .NET 3.5 Windows feature), then run:
+
+```sh
+cargo build --release -p tpt-workspaces-cli -p tpt-workspaces-gui
+cargo wix -p tpt-workspaces-cli --no-build --nocapture
+```
+
 ## Not yet covered
 
-- Installers (MSI/EXE, `.deb`, `.rpm`, Flatpak) are tracked in `todo.md`,
-  Phase 7. Archives are the only artifacts published today.
+- `.rpm` and Flatpak packages are not built.
 - Code signing is not set up. Windows SmartScreen will warn on unsigned binaries.
-- Auto-update checks are not implemented.
+- Auto-update checks are not implemented (D4 in `docs/decisions.md`).
+- The MSI's install and uninstall path has been checked only by an
+  administrative extract, not by installing it on a machine.

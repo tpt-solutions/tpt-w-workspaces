@@ -16,6 +16,13 @@ All notable changes to tpt-workspaces are recorded here. The format follows
 - `tpt-workspaces-gui`: status window and tray icon. Closing the window minimizes
   it; the tray menu offers "Show status" and "Quit".
 - Local IPC lives in `core::ipc`, shared by the CLI and the GUI.
+- Settings tab in the GUI: edit the config as text, validate it, and save. Invalid
+  text is never written, and the daemon reloads a saved file automatically.
+  Remembered window positions are listed below the editor.
+- `TPT_WORKSPACES_CONFIG` and `TPT_WORKSPACES_STATE` override the config and
+  state file locations.
+- Windows MSI installer (`cargo wix`) and a Debian package (`cargo deb`) in the
+  release workflow.
 - `tpt-workspaces pause` freezes background apps (rule-matched windows on other
   workspaces); `tpt-workspaces resume` resumes every frozen app. The same actions
   are in the GUI window and tray menu. A resumed app is frozen again on its next

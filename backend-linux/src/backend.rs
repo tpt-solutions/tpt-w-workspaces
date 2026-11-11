@@ -97,9 +97,11 @@ impl DesktopBackend for SwayBackend {
         geometry: WindowGeometry,
     ) -> Result<(), BackendError> {
         // Absolute placement only applies to floating windows, so float first.
+        // Size before position: a resize on a floating window can re-centre it,
+        // so the move goes last to keep the requested top-left corner.
         ipc::run_command(&format!(
-            "[con_id={}] floating enable, move absolute position {} {}, resize set {} {}",
-            window.0, geometry.x, geometry.y, geometry.width, geometry.height
+            "[con_id={}] floating enable, resize set {} {}, move absolute position {} {}",
+            window.0, geometry.width, geometry.height, geometry.x, geometry.y
         ))
     }
 

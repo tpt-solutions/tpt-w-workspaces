@@ -53,6 +53,22 @@ fn process_state(pid: u32) -> char {
     after.chars().next().unwrap()
 }
 
+/// Polls `check` until it returns true or `timeout` passes. Signals and sway
+/// commands take effect asynchronously, so a single read right after the call can
+/// still see the old state.
+fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if check() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 fn current_workspace(backend: &SwayBackend) -> WorkspaceId {
     backend
         .current_workspace()
@@ -108,10 +124,20 @@ fn suspend_and_resume_really_stop_the_process() {
     let pid = window.pid;
 
     backend.suspend_process(pid).unwrap();
-    assert_eq!(process_state(pid), 'T', "process should be stopped");
+    let stopped = wait_until(Duration::from_secs(2), || process_state(pid) == 'T');
+    assert!(
+        stopped,
+        "process should be stopped, state is '{}'",
+        process_state(pid)
+    );
 
     backend.resume_process(pid).unwrap();
-    assert_ne!(process_state(pid), 'T', "process should be running again");
+    let running = wait_until(Duration::from_secs(2), || process_state(pid) != 'T');
+    assert!(
+        running,
+        "process should be running again, state is '{}'",
+        process_state(pid)
+    );
 
     child.kill().ok();
     child.wait().ok();
@@ -131,21 +157,21 @@ fn geometry_is_applied_to_floating_window() {
         height: 320,
     };
     backend.set_geometry(window.id, target).unwrap();
-    std::thread::sleep(Duration::from_millis(300));
-    let actual = backend.get_geometry(window.id).unwrap();
 
     // Sway includes window decorations in the container rect, so allow a small slack.
     let close = |a: i32, b: i32| (a - b).abs() <= 8;
-    assert!(close(actual.x, target.x), "x: {actual:?} vs {target:?}");
-    assert!(close(actual.y, target.y), "y: {actual:?} vs {target:?}");
-    assert!(
-        close(actual.width as i32, target.width as i32),
-        "{actual:?}"
-    );
-    assert!(
-        close(actual.height as i32, target.height as i32),
-        "{actual:?}"
-    );
+    let fits = |g: WindowGeometry| {
+        close(g.x, target.x)
+            && close(g.y, target.y)
+            && close(g.width as i32, target.width as i32)
+            && close(g.height as i32, target.height as i32)
+    };
+    // The client may resize itself (terminals snap to whole cells), so wait for the layout to settle.
+    let settled = wait_until(Duration::from_secs(5), || {
+        backend.get_geometry(window.id).is_ok_and(fits)
+    });
+    let actual = backend.get_geometry(window.id).unwrap();
+    assert!(settled, "geometry did not settle: {actual:?} vs {target:?}");
 
     child.kill().ok();
     child.wait().ok();

@@ -1,0 +1,27 @@
+[package]
+name = "tpt-workspaces-cli"
+description = "tpt-workspaces: command-line tool and background daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tpt-workspaces"
+path = "src/main.rs"
+
+[dependencies]
+tpt-workspaces-core = { path = "../core", features = ["sqlite", "watch"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+ctrlc = { version = "3", features = ["termination"] }
+dirs = "5"
+
+[target.'cfg(windows)'.dependencies]
+tpt-workspaces-backend-windows = { path = "../backend-windows" }
+winreg = "0.52"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tpt-workspaces-backend-linux = { path = "../backend-linux" }

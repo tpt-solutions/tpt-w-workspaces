@@ -56,8 +56,25 @@ jobs:
       - name: Run tests before packaging
         run: cargo test --workspace --all-features --release
 
-      - name: Build release binary
-        run: cargo build -p tpt-workspaces-cli --release --locked
+      - name: Build release binaries
+        run: cargo build -p tpt-workspaces-cli -p tpt-workspaces-gui --release --locked
+
+      - name: Build Windows installer (MSI)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          cargo install cargo-wix --locked
+          cargo wix -p tpt-workspaces-cli --no-build --nocapture
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item (Get-ChildItem target/wix/*.msi | Select-Object -First 1).FullName "dist/tpt-workspaces-$env:GITHUB_REF_NAME-x86_64.msi"
+
+      - name: Build Debian package (.deb)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb -p tpt-workspaces-cli --no-build
+          mkdir -p dist
+          cp target/debian/*.deb dist/
 
       - name: Package
         shell: bash
@@ -80,7 +97,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: dist/*.${{ matrix.archive }}
+          path: |
+            dist/*.${{ matrix.archive }}
+            dist/*.msi
+            dist/*.deb
           if-no-files-found: error
 
   publish:

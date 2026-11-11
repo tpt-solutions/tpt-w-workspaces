@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=tpt-workspaces
+Comment=Status window for the tpt-workspaces daemon
+Exec=/usr/bin/tpt-workspaces-gui
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Utility;Settings;

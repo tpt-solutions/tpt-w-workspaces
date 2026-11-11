@@ -25,3 +25,23 @@ winreg = "0.52"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tpt-workspaces-backend-linux = { path = "../backend-linux" }
+
+[package.metadata.wix]
+# The project is dual-licensed and has no RTF EULA for the installer.
+eula = false
+
+[package.metadata.deb]
+# Built by `cargo deb -p tpt-workspaces-cli --no-build` after a release build.
+# Dependency list is not yet verified on a Linux machine; see docs/releasing.md.
+section = "utils"
+priority = "optional"
+extended-description = "Persistent workspaces that move apps to their desktop, remember window geometry and pause background apps. Ships the command-line tool, the daemon and a status window."
+depends = "libgtk-3-0, libayatana-appindicator3-1 | libappindicator3-1, libxkbcommon0, libwayland-client0, libgl1"
+assets = [
+    ["../target/release/tpt-workspaces", "usr/bin/", "755"],
+    ["../target/release/tpt-workspaces-gui", "usr/bin/", "755"],
+    ["../packaging/tpt-workspaces-gui.desktop", "usr/share/applications/", "644"],
+    ["../README.md", "usr/share/doc/tpt-workspaces/", "644"],
+    ["../LICENSE-MIT", "usr/share/doc/tpt-workspaces/", "644"],
+    ["../LICENSE-APACHE", "usr/share/doc/tpt-workspaces/", "644"],
+]

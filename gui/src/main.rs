@@ -9,6 +9,7 @@
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -71,17 +72,20 @@ struct App {
     feedback: Feedback,
     tab: Tab,
     settings: Settings,
+    /// Set by the tray's "Open settings" item; the window switches tabs on its next frame.
+    open_settings: Arc<AtomicBool>,
     _tray: TrayIcon,
 }
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, state: SharedState) -> Result<Self, String> {
         let show = MenuItem::new("Show status", true, None);
+        let settings_item = MenuItem::new("Open settings", true, None);
         let pause = MenuItem::new("Pause background apps", true, None);
         let resume = MenuItem::new("Resume all", true, None);
         let quit = MenuItem::new("Quit", true, None);
         let menu = Menu::new();
-        for item in [&show, &pause, &resume, &quit] {
+        for item in [&show, &settings_item, &pause, &resume, &quit] {
             menu.append(item).map_err(|e| e.to_string())?;
         }
         let tray = TrayIconBuilder::new()
@@ -105,17 +109,26 @@ impl App {
         // window stops receiving repaints, so `update` may not run for a long time.
         let ids = TrayIds {
             show: show.id().clone(),
+            settings: settings_item.id().clone(),
             pause: pause.id().clone(),
             resume: resume.id().clone(),
             quit: quit.id().clone(),
         };
         let menu_ctx = ctx.clone();
         let menu_feedback = feedback.clone();
+        let open_settings = Arc::new(AtomicBool::new(false));
+        let menu_open_settings = open_settings.clone();
         thread::Builder::new()
             .name("tpt-gui-menu".into())
             .spawn(move || {
                 for event in MenuEvent::receiver().iter() {
-                    handle_menu(&ids, &event.id, &menu_ctx, &menu_feedback);
+                    handle_menu(
+                        &ids,
+                        &event.id,
+                        &menu_ctx,
+                        &menu_feedback,
+                        &menu_open_settings,
+                    );
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -140,6 +153,7 @@ impl App {
             feedback,
             tab: Tab::Status,
             settings: Settings::open(paths::config_file(), paths::state_file()),
+            open_settings,
             _tray: tray,
         })
     }
@@ -154,13 +168,23 @@ impl App {
 
 struct TrayIds {
     show: MenuId,
+    settings: MenuId,
     pause: MenuId,
     resume: MenuId,
     quit: MenuId,
 }
 
-fn handle_menu(ids: &TrayIds, id: &MenuId, ctx: &egui::Context, feedback: &Feedback) {
+fn handle_menu(
+    ids: &TrayIds,
+    id: &MenuId,
+    ctx: &egui::Context,
+    feedback: &Feedback,
+    open_settings: &AtomicBool,
+) {
     if *id == ids.show {
+        show_window(ctx);
+    } else if *id == ids.settings {
+        open_settings.store(true, Ordering::SeqCst);
         show_window(ctx);
     } else if *id == ids.pause {
         spawn_action(
@@ -185,6 +209,10 @@ fn show_window(ctx: &egui::Context) {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.open_settings.swap(false, Ordering::SeqCst) {
+            self.tab = Tab::Settings;
+        }
+
         // Closing the window minimizes it instead of hiding it. A hidden eframe
         // window stops processing commands, so the tray could not bring it back.
         // Only the tray's "Quit" exits.
@@ -274,6 +302,12 @@ fn show_settings(ui: &mut egui::Ui, settings: &mut Settings) {
         {
             settings.reload();
         }
+        if ui.button("Add workspace").clicked() {
+            settings.add_workspace_template();
+        }
+        if ui.button("Add rule").clicked() {
+            settings.add_rule_template();
+        }
         if settings.dirty() {
             ui.small("Unsaved changes");
         }
@@ -308,13 +342,21 @@ fn show_settings(ui: &mut egui::Ui, settings: &mut Settings) {
                     ui.strong("App");
                     ui.strong("Position");
                     ui.strong("Size");
+                    ui.strong("");
                     ui.end_row();
+                    let mut forget = None;
                     for (key, geometry) in &settings.geometries {
                         ui.label(key.workspace.as_str());
                         ui.label(&key.executable);
                         ui.label(format!("{}, {}", geometry.x, geometry.y));
                         ui.label(format!("{} × {}", geometry.width, geometry.height));
+                        if ui.small_button("Forget").clicked() {
+                            forget = Some(key.clone());
+                        }
                         ui.end_row();
+                    }
+                    if let Some(key) = forget {
+                        settings.forget_geometry(&key);
                     }
                 });
             });

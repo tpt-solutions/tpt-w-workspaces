@@ -109,6 +109,56 @@ impl Settings {
         }
     }
 
+    /// Appends a commented-out-free workspace block for the user to fill in.
+    /// Nothing is saved until the user validates and saves.
+    pub fn add_workspace_template(&mut self) {
+        append_block(
+            &mut self.text,
+            "[[workspace]]
+id = \"new-workspace\"
+name = \"New workspace\"
+",
+        );
+        self.message = Some((
+            false,
+            "Added a workspace. Edit it, then Validate and Save.".into(),
+        ));
+    }
+
+    /// Appends a rule block that refers to the first workspace in the file, or a
+    /// placeholder if there is none.
+    pub fn add_rule_template(&mut self) {
+        let target = first_workspace_id(&self.text).unwrap_or_else(|| "new-workspace".into());
+        append_block(
+            &mut self.text,
+            &format!(
+                "[[rule]]
+name = \"New rule\"
+executable = \"app.exe\"
+workspace = \"{target}\"
+"
+            ),
+        );
+        self.message = Some((
+            false,
+            "Added a rule. Edit it, then Validate and Save.".into(),
+        ));
+    }
+
+    /// Forgets a saved window position. The app is placed normally next time.
+    pub fn forget_geometry(&mut self, key: &GeometryKey) {
+        match SqliteStore::open(&self.state_path)
+            .map_err(|e| e.to_string())
+            .and_then(|store| store.delete_geometry(key).map_err(|e| e.to_string()))
+        {
+            Ok(_) => {
+                self.message = Some((false, format!("Forgot the position of {}", key.executable)));
+                self.refresh_geometries();
+            }
+            Err(e) => self.message = Some((true, format!("Could not forget the position: {e}"))),
+        }
+    }
+
     /// Reads the geometries the daemon has saved. A missing state file means none yet.
     pub fn refresh_geometries(&mut self) {
         self.geometry_error = None;
@@ -124,6 +174,38 @@ impl Settings {
             }
         }
     }
+}
+
+/// Adds `block` after the existing text, separated by a blank line.
+fn append_block(text: &mut String, block: &str) {
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    text.push_str(block);
+}
+
+/// The id of the first `[[workspace]]` block, found by a simple line scan. Used only
+/// to suggest a default target; validation is still done by the core parser.
+fn first_workspace_id(text: &str) -> Option<String> {
+    let mut in_workspace = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line == "[[workspace]]" {
+            in_workspace = true;
+        } else if line.starts_with("[[") {
+            in_workspace = false;
+        } else if in_workspace {
+            if let Some(rest) = line.strip_prefix("id") {
+                if let Some(value) = rest.trim_start().strip_prefix('=') {
+                    return Some(value.trim().trim_matches('"').to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn read_geometries(path: &Path) -> Result<Vec<(GeometryKey, WindowGeometry)>, String> {
@@ -217,6 +299,59 @@ mod tests {
             settings.message.unwrap().1,
             "Valid: 1 workspace(s), 0 rule(s)"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn templates_append_blocks_that_validate_once_filled_in() {
+        let dir = temp_dir("templates");
+        let mut settings = Settings::open(dir.join("config.toml"), dir.join("state.db"));
+        settings.text = VALID.into();
+
+        settings.add_rule_template();
+        assert!(
+            settings.text.contains("workspace = \"dev\""),
+            "{}",
+            settings.text
+        );
+        assert!(settings.validate().is_some());
+
+        settings.add_workspace_template();
+        assert!(settings.text.contains("new-workspace"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn forget_removes_a_saved_position() {
+        use tpt_workspaces_core::sqlite::SqliteStore;
+        use tpt_workspaces_core::{GeometryKey, StateStore, WindowGeometry, WorkspaceId};
+
+        let dir = temp_dir("forget");
+        let state = dir.join("state.db");
+        let key = GeometryKey {
+            workspace: WorkspaceId::new("dev"),
+            executable: "code.exe".into(),
+        };
+        {
+            let mut store = SqliteStore::open(&state).unwrap();
+            store
+                .save_geometry(
+                    &key,
+                    WindowGeometry {
+                        x: 1,
+                        y: 2,
+                        width: 3,
+                        height: 4,
+                    },
+                )
+                .unwrap();
+        }
+        let mut settings = Settings::open(dir.join("config.toml"), state);
+        assert_eq!(settings.geometries.len(), 1);
+
+        settings.forget_geometry(&key);
+        assert!(settings.geometries.is_empty());
+        assert!(!settings.message.unwrap().0);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -31,7 +31,7 @@ MIT OR Apache-2.0 (TPT Solutions).
 - [x] Move windows to target desktop based on matched `AppRule`
 - [x] Save/restore window position & size (geometry) per desktop
 - [x] Implement app pause/resume via thread suspension (`NtSuspendProcess`/`NtResumeProcess` or per-thread `SuspendThread`)
-- [ ] Handle edge cases: multi-window apps, elevated processes, UWP apps
+- [x] Handle edge cases: multi-window apps, elevated processes, UWP apps
 
 ## Phase 4 — Linux Backend (`backend-linux`, Wayland)
 - [ ] Implement Wayland protocol client for window placement (research and pick protocol(s) usable across GNOME/KDE, e.g. `wlr-foreign-toplevel-management`, or compositor-specific extensions where needed)
@@ -39,30 +39,30 @@ MIT OR Apache-2.0 (TPT Solutions).
 - [ ] Move windows to target workspace based on matched `AppRule`
 - [ ] Save/restore window geometry per workspace
 - [ ] Implement app pause/resume via `SIGSTOP`/`SIGCONT` or cgroup freezer
-- [ ] Document GNOME vs KDE support matrix/limitations
+- [x] Document GNOME vs KDE support matrix/limitations
 
 ## Phase 5 — Background Service / Daemon
-- [ ] Long-running background process wiring core + active backend together
-- [ ] Startup/autostart registration (Windows Task Scheduler / registry run key; Linux systemd user service)
+- [x] Long-running background process wiring core + active backend together
+- [x] Startup/autostart registration (Windows Task Scheduler / registry run key; Linux systemd user service)
 - [x] Graceful shutdown & crash recovery (reload last known state)
 - [x] Structured logging
 
 ## Phase 6 — Tray Icon + Settings GUI (`gui` crate)
-- [ ] Tray icon with quick actions (pause/resume all, open settings, quit)
+- [ ] Tray icon with quick actions (pause/resume all, open settings, quit) — partial: show status, pause background apps, resume all and quit done; open settings pending
 - [ ] Settings window: manage workspaces, add/edit app-assignment rules
 - [ ] Settings window: view/edit saved window geometries
-- [ ] Live status view (which apps are paused, which workspace is active)
-- [ ] Wire GUI to daemon (local IPC — pick mechanism: named pipe/unix socket)
+- [x] Live status view (which apps are paused, which workspace is active)
+- [x] Wire GUI to daemon (local IPC — pick mechanism: named pipe/unix socket)
 
 ## Phase 7 — Packaging & Distribution
 - [ ] Windows installer (MSI/EXE via e.g. `cargo-wix` or WiX directly)
 - [ ] Linux packaging: `.deb`, `.rpm`, and/or Flatpak
-- [ ] Versioning & release process
+- [x] Versioning & release process
 - [ ] Basic auto-update check (optional for v1)
 
 ## Phase 8 — Testing & Hardening
 - [ ] End-to-end manual test matrix (Windows 10/11, GNOME, KDE)
-- [ ] Stress test with many workspaces/rules/windows
+- [x] Stress test with many workspaces/rules/windows
 - [ ] Handle multi-monitor setups
 - [ ] Accessibility pass on GUI
 

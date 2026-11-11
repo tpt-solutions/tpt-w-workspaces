@@ -72,10 +72,15 @@ cargo test --workspace --all-features
 | Crate | Purpose |
 | --- | --- |
 | `core` | Platform-agnostic domain model, rule engine, transitions, config, storage traits |
-| `backend-windows` | Windows Virtual Desktop backend (planned) |
-| `backend-linux` | Wayland backend (planned) |
-| `gui` | Tray icon and settings window (planned) |
+| `backend-windows` | Windows Virtual Desktop backend |
+| `backend-linux` | sway (wlroots) backend via sway IPC |
+| `gui` | Status window and tray icon (`tpt-workspaces-gui`); settings editing is planned |
 | `cli` | `tpt-workspaces` command-line tool |
+
+## Linux support
+
+Only sway is supported today. See [docs/linux-support.md](docs/linux-support.md)
+for the GNOME and KDE status and the sway limitations.
 
 ## Installation
 

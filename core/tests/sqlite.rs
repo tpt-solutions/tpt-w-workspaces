@@ -112,3 +112,24 @@ fn list_geometries_returns_every_saved_entry_in_order() {
         ]
     );
 }
+
+#[test]
+fn delete_geometry_forgets_only_the_given_entry() {
+    use tpt_workspaces_core::sqlite::SqliteStore;
+
+    let mut store = SqliteStore::open_in_memory().unwrap();
+    let geo = WindowGeometry {
+        x: 1,
+        y: 2,
+        width: 3,
+        height: 4,
+    };
+    store.save_geometry(&key("dev", "code.exe"), geo).unwrap();
+    store.save_geometry(&key("dev", "other.exe"), geo).unwrap();
+
+    assert!(store.delete_geometry(&key("dev", "code.exe")).unwrap());
+    assert!(!store.delete_geometry(&key("dev", "code.exe")).unwrap());
+    let left = store.list_geometries().unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].0, key("dev", "other.exe"));
+}

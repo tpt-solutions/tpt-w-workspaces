@@ -54,6 +54,15 @@ impl SqliteStore {
         Ok(SqliteStore { conn })
     }
 
+    /// Forgets the saved geometry for `key`. Returns whether a row was removed.
+    pub fn delete_geometry(&self, key: &GeometryKey) -> rusqlite::Result<bool> {
+        let removed = self.conn.execute(
+            "DELETE FROM window_geometry WHERE workspace = ?1 AND executable = ?2",
+            params![key.workspace.as_str(), key.executable],
+        )?;
+        Ok(removed > 0)
+    }
+
     /// Every saved window geometry, ordered by workspace and then executable.
     pub fn list_geometries(&self) -> rusqlite::Result<Vec<(GeometryKey, WindowGeometry)>> {
         let mut stmt = self.conn.prepare(

@@ -467,23 +467,70 @@ fn show_settings_contents(ui: &mut egui::Ui, settings: &mut Settings) {
                     ui.strong("Size");
                     ui.strong("");
                     ui.end_row();
-                    let mut forget = None;
-                    for (key, geometry) in &settings.geometries {
+                    let mut action = None;
+                    for (i, (key, geometry)) in settings.geometries.iter().enumerate() {
                         ui.label(key.workspace.as_str());
                         ui.label(&key.executable);
-                        ui.label(format!("{}, {}", geometry.x, geometry.y));
-                        ui.label(format!("{} × {}", geometry.width, geometry.height));
-                        if ui.small_button("Forget").clicked() {
-                            forget = Some(key.clone());
+                        let editing_this = settings.editing.as_ref().is_some_and(|(k, _)| k == key);
+                        if editing_this {
+                            if let Some((_, g)) = settings.editing.as_mut() {
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::DragValue::new(&mut g.x).prefix("x "));
+                                    ui.add(egui::DragValue::new(&mut g.y).prefix("y "));
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::DragValue::new(&mut g.width)
+                                            .range(1..=100_000)
+                                            .prefix("w "),
+                                    );
+                                    ui.add(
+                                        egui::DragValue::new(&mut g.height)
+                                            .range(1..=100_000)
+                                            .prefix("h "),
+                                    );
+                                });
+                            }
+                            ui.horizontal(|ui| {
+                                if ui.small_button("Save").clicked() {
+                                    action = Some(GeometryAction::Save);
+                                }
+                                if ui.small_button("Cancel").clicked() {
+                                    action = Some(GeometryAction::Cancel);
+                                }
+                            });
+                        } else {
+                            ui.label(format!("{}, {}", geometry.x, geometry.y));
+                            ui.label(format!("{} × {}", geometry.width, geometry.height));
+                            ui.horizontal(|ui| {
+                                if ui.small_button("Edit").clicked() {
+                                    action = Some(GeometryAction::Edit(i));
+                                }
+                                if ui.small_button("Forget").clicked() {
+                                    action = Some(GeometryAction::Forget(key.clone()));
+                                }
+                            });
                         }
                         ui.end_row();
                     }
-                    if let Some(key) = forget {
-                        settings.forget_geometry(&key);
+                    match action {
+                        Some(GeometryAction::Edit(i)) => settings.begin_edit(i),
+                        Some(GeometryAction::Save) => settings.commit_edit(),
+                        Some(GeometryAction::Cancel) => settings.cancel_edit(),
+                        Some(GeometryAction::Forget(key)) => settings.forget_geometry(&key),
+                        None => {}
                     }
                 });
             });
     }
+}
+
+/// A click on a row of the remembered-positions table, applied after the table is drawn.
+enum GeometryAction {
+    Edit(usize),
+    Save,
+    Cancel,
+    Forget(tpt_workspaces_core::GeometryKey),
 }
 
 fn show_status(ui: &mut egui::Ui, status: &Status) {

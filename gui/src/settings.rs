@@ -12,7 +12,7 @@ use tpt_workspaces_core::config::{
     self, Config, ConfigError, ConfigFile, RuleEntry, WorkspaceEntry,
 };
 use tpt_workspaces_core::sqlite::SqliteStore;
-use tpt_workspaces_core::{GeometryKey, WindowGeometry};
+use tpt_workspaces_core::{GeometryKey, StateStore, WindowGeometry};
 
 pub struct Settings {
     /// Workspaces and rules as fields, for the form. Applied to the text on request.
@@ -30,6 +30,8 @@ pub struct Settings {
     pub message: Option<(bool, String)>,
     pub geometries: Vec<(GeometryKey, WindowGeometry)>,
     pub geometry_error: Option<String>,
+    /// The row being edited, and the values typed so far.
+    pub editing: Option<(GeometryKey, WindowGeometry)>,
 }
 
 impl Settings {
@@ -46,6 +48,7 @@ impl Settings {
             message: None,
             geometries: Vec::new(),
             geometry_error: None,
+            editing: None,
         };
         settings.reload();
         settings.refresh_geometries();
@@ -227,6 +230,47 @@ workspace = \"{target}\"
         ));
     }
 
+    /// Starts editing the saved position at `index`.
+    pub fn begin_edit(&mut self, index: usize) {
+        self.editing = self.geometries.get(index).cloned();
+    }
+
+    pub fn cancel_edit(&mut self) {
+        self.editing = None;
+    }
+
+    /// Writes the edited position to the state database. Size must be positive.
+    pub fn commit_edit(&mut self) {
+        let Some((key, geometry)) = self.editing.clone() else {
+            return;
+        };
+        if geometry.width == 0 || geometry.height == 0 {
+            self.message = Some((true, "Width and height must be above zero.".into()));
+            return;
+        }
+        let result = SqliteStore::open(&self.state_path)
+            .map_err(|e| e.to_string())
+            .and_then(|mut store| {
+                store
+                    .save_geometry(&key, geometry)
+                    .map_err(|e| e.to_string())
+            });
+        match result {
+            Ok(()) => {
+                self.editing = None;
+                self.message = Some((
+                    false,
+                    format!(
+                        "Saved the position of {}. Applies the next time it appears.",
+                        key.executable
+                    ),
+                ));
+                self.refresh_geometries();
+            }
+            Err(e) => self.message = Some((true, format!("Could not save the position: {e}"))),
+        }
+    }
+
     /// Forgets a saved window position. The app is placed normally next time.
     pub fn forget_geometry(&mut self, key: &GeometryKey) {
         match SqliteStore::open(&self.state_path)
@@ -304,6 +348,7 @@ fn describe(error: &ConfigError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tpt_workspaces_core::WorkspaceId;
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir =
@@ -480,6 +525,71 @@ mod tests {
         settings.load_form();
         assert_eq!(settings.workspaces.len(), 1, "form kept its fields");
         assert!(settings.message.unwrap().0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn edited_position_is_saved_and_listed() {
+        let dir = temp_dir("edit-geo");
+        let state = dir.join("state.db");
+        let key = GeometryKey {
+            workspace: WorkspaceId::new("dev"),
+            executable: "code.exe".into(),
+        };
+        {
+            let mut store = SqliteStore::open(&state).unwrap();
+            store
+                .save_geometry(
+                    &key,
+                    WindowGeometry {
+                        x: 1,
+                        y: 2,
+                        width: 3,
+                        height: 4,
+                    },
+                )
+                .unwrap();
+        }
+        let mut settings = Settings::open(dir.join("config.toml"), state);
+        settings.begin_edit(0);
+        settings.editing.as_mut().unwrap().1.x = 500;
+        settings.commit_edit();
+
+        assert!(settings.editing.is_none());
+        assert_eq!(settings.geometries[0].1.x, 500);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn edit_rejects_zero_size_and_keeps_the_row_open() {
+        let dir = temp_dir("edit-zero");
+        let state = dir.join("state.db");
+        let key = GeometryKey {
+            workspace: WorkspaceId::new("dev"),
+            executable: "code.exe".into(),
+        };
+        {
+            let mut store = SqliteStore::open(&state).unwrap();
+            store
+                .save_geometry(
+                    &key,
+                    WindowGeometry {
+                        x: 1,
+                        y: 2,
+                        width: 3,
+                        height: 4,
+                    },
+                )
+                .unwrap();
+        }
+        let mut settings = Settings::open(dir.join("config.toml"), state);
+        settings.begin_edit(0);
+        settings.editing.as_mut().unwrap().1.width = 0;
+        settings.commit_edit();
+
+        assert!(settings.editing.is_some());
+        assert!(settings.message.unwrap().0);
+        assert_eq!(settings.geometries[0].1.width, 3, "stored value unchanged");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

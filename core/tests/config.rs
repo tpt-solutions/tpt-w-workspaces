@@ -157,3 +157,26 @@ fn save_replaces_the_file_when_valid() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn render_round_trips_through_parse() {
+    use tpt_workspaces_core::config::{self, ConfigFile, RuleEntry, WorkspaceEntry};
+    let file = ConfigFile {
+        schema_version: 1,
+        workspaces: vec![WorkspaceEntry {
+            id: "dev".into(),
+            name: Some("Development".into()),
+        }],
+        rules: vec![RuleEntry {
+            name: Some("Editor".into()),
+            executable: Some("Code.exe".into()),
+            window_class: None,
+            workspace: "dev".into(),
+        }],
+    };
+    let text = config::render(&file).unwrap();
+    let cfg = config::parse(&text).expect("rendered text is valid");
+    assert_eq!(cfg.workspaces.len(), 1);
+    assert_eq!(cfg.rules.len(), 1);
+    assert_eq!(config::parse_entries(&text).unwrap(), file);
+}

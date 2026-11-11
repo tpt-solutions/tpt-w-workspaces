@@ -85,6 +85,17 @@ pub enum ConfigError {
     Invalid(Vec<String>),
 }
 
+/// Parses config text without validating its contents, so an editor can show a
+/// partly valid file. Syntax errors are still reported.
+pub fn parse_entries(source: &str) -> Result<ConfigFile, ConfigError> {
+    Ok(toml::from_str(source)?)
+}
+
+/// Writes a config file as TOML text. Comments in any previous text are not kept.
+pub fn render(file: &ConfigFile) -> Result<String, toml::ser::Error> {
+    toml::to_string_pretty(file)
+}
+
 /// Parses and validates config text. All validation problems are collected
 /// and reported together.
 pub fn parse(source: &str) -> Result<Config, ConfigError> {

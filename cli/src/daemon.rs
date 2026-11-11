@@ -6,11 +6,12 @@
 
 use std::path::Path;
 use std::sync::mpsc;
+use std::time::Instant;
 
 use tpt_workspaces_core::config;
 use tpt_workspaces_core::sqlite::SqliteStore;
 use tpt_workspaces_core::{Engine, Event};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::platform;
 use tpt_workspaces_core::ipc::{self, FrozenProcess, Query, Status, WorkspaceStatus};
@@ -50,6 +51,18 @@ fn status(engine: &Engine<platform::Backend, SqliteStore>, names: &[(String, Str
         workspaces,
         rules: engine.rules().len(),
         paused,
+    }
+}
+
+/// Events slower than this are logged at warning level, so a stall shows up in the log.
+const SLOW_EVENT_MS: u128 = 2000;
+
+fn event_kind(event: &Event) -> &'static str {
+    match event {
+        Event::WindowAppeared(_) => "window_appeared",
+        Event::WindowFocused(_) => "window_focused",
+        Event::WorkspaceFocused(_) => "workspace_focused",
+        Event::ConfigReloaded(_) => "config_reloaded",
     }
 }
 
@@ -153,8 +166,25 @@ pub fn run(config_path: &Path, state_path: &Path) -> Result<(), String> {
                 if let Event::ConfigReloaded(new) = &event {
                     names = workspace_names(new);
                 }
+                let kind = event_kind(&event);
+                debug!(event = kind, "handling event");
+                let started = Instant::now();
                 if let Err(e) = engine.handle(event) {
                     error!(error = %e, "failed to handle event");
+                }
+                let elapsed = started.elapsed();
+                if elapsed.as_millis() >= SLOW_EVENT_MS {
+                    warn!(
+                        event = kind,
+                        elapsed_ms = elapsed.as_millis() as u64,
+                        "slow event"
+                    );
+                } else {
+                    debug!(
+                        event = kind,
+                        elapsed_ms = elapsed.as_millis() as u64,
+                        "handled event"
+                    );
                 }
             }
             Message::Query(query) => {

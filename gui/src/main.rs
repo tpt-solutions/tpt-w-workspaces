@@ -285,7 +285,129 @@ const SUCCESS: egui::Color32 = egui::Color32::from_rgb(21, 128, 61);
 /// Secondary text. Meets WCAG AA contrast (4.5:1) on a light background.
 const MUTED: egui::Color32 = egui::Color32::from_rgb(95, 95, 95);
 
+/// Edits workspaces and rules as fields. Nothing reaches the text until Apply.
+fn show_form(ui: &mut egui::Ui, settings: &mut Settings) {
+    egui::CollapsingHeader::new("Form: workspaces and rules")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("Load form from text").clicked() {
+                    settings.load_form();
+                }
+                if ui
+                    .add_enabled(settings.form_dirty, egui::Button::new("Apply form to text"))
+                    .clicked()
+                {
+                    settings.apply_form();
+                }
+                if settings.form_dirty {
+                    ui.small("Form changes not applied yet");
+                }
+            });
+            ui.small("Applying rewrites the text, so comments in it are not kept.");
+
+            ui.strong("Workspaces");
+            let mut remove_workspace = None;
+            for (i, ws) in settings.workspaces.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    let mut id = ws.id.clone();
+                    ui.label("id");
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut id).desired_width(120.0))
+                        .changed()
+                    {
+                        ws.id = id;
+                        settings.form_dirty = true;
+                    }
+                    let mut name = ws.name.clone().unwrap_or_default();
+                    ui.label("name");
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut name).desired_width(140.0))
+                        .changed()
+                    {
+                        ws.name = if name.is_empty() { None } else { Some(name) };
+                        settings.form_dirty = true;
+                    }
+                    if ui.small_button("Remove").clicked() {
+                        remove_workspace = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = remove_workspace {
+                settings.remove_workspace(i);
+            }
+            if ui.button("Add workspace row").clicked() {
+                settings.add_workspace();
+            }
+
+            ui.add_space(6.0);
+            ui.strong("Rules");
+            let ids: Vec<String> = settings.workspaces.iter().map(|w| w.id.clone()).collect();
+            let mut remove_rule = None;
+            let mut changed = false;
+            for (i, rule) in settings.rules.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    let mut exe = rule.executable.clone().unwrap_or_default();
+                    ui.label("executable");
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut exe).desired_width(120.0))
+                        .changed()
+                    {
+                        rule.executable = if exe.is_empty() { None } else { Some(exe) };
+                        changed = true;
+                    }
+                    let mut class = rule.window_class.clone().unwrap_or_default();
+                    ui.label("window class");
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut class).desired_width(120.0))
+                        .changed()
+                    {
+                        rule.window_class = if class.is_empty() { None } else { Some(class) };
+                        changed = true;
+                    }
+                    ui.label("to");
+                    egui::ComboBox::from_id_salt(("rule-workspace", i))
+                        .selected_text(rule.workspace.clone())
+                        .show_ui(ui, |ui| {
+                            for id in &ids {
+                                if ui
+                                    .selectable_value(&mut rule.workspace, id.clone(), id)
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                            }
+                        });
+                    if ui.small_button("Remove").clicked() {
+                        remove_rule = Some(i);
+                    }
+                });
+            }
+            if changed {
+                settings.form_dirty = true;
+            }
+            if let Some(i) = remove_rule {
+                settings.remove_rule(i);
+            }
+            if ui
+                .add_enabled(!ids.is_empty(), egui::Button::new("Add rule row"))
+                .clicked()
+            {
+                settings.add_rule();
+            }
+            if ids.is_empty() {
+                ui.small("Add a workspace before adding a rule.");
+            }
+        });
+}
+
 fn show_settings(ui: &mut egui::Ui, settings: &mut Settings) {
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| show_settings_contents(ui, settings));
+}
+
+fn show_settings_contents(ui: &mut egui::Ui, settings: &mut Settings) {
     ui.horizontal(|ui| {
         if ui.button("Validate").clicked() {
             settings.validate();
@@ -315,6 +437,7 @@ fn show_settings(ui: &mut egui::Ui, settings: &mut Settings) {
     if let Some((is_error, message)) = &settings.message {
         ui.colored_label(if *is_error { ERROR } else { SUCCESS }, message);
     }
+    show_form(ui, settings);
     ui.add(
         egui::TextEdit::multiline(&mut settings.text)
             .code_editor()
@@ -394,7 +517,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("tpt-workspaces")
-            .with_inner_size([420.0, 400.0]),
+            .with_inner_size([600.0, 520.0]),
         ..Default::default()
     };
     eframe::run_native(

@@ -8,11 +8,18 @@
 
 use std::path::{Path, PathBuf};
 
-use tpt_workspaces_core::config::{self, Config, ConfigError};
+use tpt_workspaces_core::config::{
+    self, Config, ConfigError, ConfigFile, RuleEntry, WorkspaceEntry,
+};
 use tpt_workspaces_core::sqlite::SqliteStore;
 use tpt_workspaces_core::{GeometryKey, WindowGeometry};
 
 pub struct Settings {
+    /// Workspaces and rules as fields, for the form. Applied to the text on request.
+    pub workspaces: Vec<WorkspaceEntry>,
+    pub rules: Vec<RuleEntry>,
+    /// Whether the form has edits that Apply has not yet written to the text.
+    pub form_dirty: bool,
     pub config_path: PathBuf,
     pub state_path: PathBuf,
     /// The editor's contents. May differ from the file while the user is editing.
@@ -29,6 +36,9 @@ impl Settings {
     /// Reads the config file and the remembered geometries.
     pub fn open(config_path: PathBuf, state_path: PathBuf) -> Self {
         let mut settings = Settings {
+            workspaces: Vec::new(),
+            rules: Vec::new(),
+            form_dirty: false,
             config_path,
             state_path,
             text: String::new(),
@@ -42,18 +52,90 @@ impl Settings {
         settings
     }
 
+    /// Reads the form's fields from the text. Text that does not parse leaves the
+    /// form as it was and reports the error.
+    pub fn load_form(&mut self) {
+        match config::parse_entries(&self.text) {
+            Ok(file) => {
+                self.workspaces = file.workspaces;
+                self.rules = file.rules;
+                self.form_dirty = false;
+            }
+            Err(e) => self.message = Some((true, format!("Form not loaded: {e}"))),
+        }
+    }
+
+    /// Writes the form's fields into the text. The text is not saved until Save.
+    pub fn apply_form(&mut self) {
+        let file = ConfigFile {
+            schema_version: config::CURRENT_SCHEMA_VERSION,
+            workspaces: self.workspaces.clone(),
+            rules: self.rules.clone(),
+        };
+        match config::render(&file) {
+            Ok(text) => {
+                self.text = text;
+                self.form_dirty = false;
+                self.message = Some((
+                    false,
+                    "Applied the form. Validate and Save to keep it.".into(),
+                ));
+            }
+            Err(e) => self.message = Some((true, format!("Could not write the form: {e}"))),
+        }
+    }
+
+    pub fn add_workspace(&mut self) {
+        let n = self.workspaces.len() + 1;
+        self.workspaces.push(WorkspaceEntry {
+            id: format!("workspace-{n}"),
+            name: Some(format!("Workspace {n}")),
+        });
+        self.form_dirty = true;
+    }
+
+    pub fn remove_workspace(&mut self, index: usize) {
+        if index < self.workspaces.len() {
+            self.workspaces.remove(index);
+            self.form_dirty = true;
+        }
+    }
+
+    pub fn add_rule(&mut self) {
+        let workspace = self
+            .workspaces
+            .first()
+            .map(|w| w.id.clone())
+            .unwrap_or_default();
+        self.rules.push(RuleEntry {
+            name: None,
+            executable: Some("app.exe".into()),
+            window_class: None,
+            workspace,
+        });
+        self.form_dirty = true;
+    }
+
+    pub fn remove_rule(&mut self, index: usize) {
+        if index < self.rules.len() {
+            self.rules.remove(index);
+            self.form_dirty = true;
+        }
+    }
+
     /// Whether the editor differs from the file on disk.
     pub fn dirty(&self) -> bool {
         self.text != self.saved_text
     }
 
-    /// Discards edits and reads the file again.
+    /// Discards edits and reads the file again, including the form.
     pub fn reload(&mut self) {
         match std::fs::read_to_string(&self.config_path) {
             Ok(text) => {
                 self.text = text.clone();
                 self.saved_text = text;
                 self.message = Some((false, format!("Loaded {}", self.config_path.display())));
+                self.load_form();
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 self.text = String::new();
@@ -352,6 +434,52 @@ mod tests {
         settings.forget_geometry(&key);
         assert!(settings.geometries.is_empty());
         assert!(!settings.message.unwrap().0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn form_applies_to_text_that_validates() {
+        let dir = temp_dir("form");
+        let mut settings = Settings::open(dir.join("config.toml"), dir.join("state.db"));
+        settings.text = VALID.into();
+        settings.load_form();
+        assert_eq!(settings.workspaces.len(), 1);
+
+        settings.add_rule();
+        assert!(settings.form_dirty);
+        settings.rules[0].executable = Some("Code.exe".into());
+        settings.apply_form();
+        assert!(!settings.form_dirty);
+        let cfg = settings.validate().expect("applied form is valid");
+        assert_eq!(cfg.rules.len(), 1);
+        assert_eq!(cfg.rules[0].target.as_str(), "dev");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn form_adds_and_removes_entries() {
+        let dir = temp_dir("form-ops");
+        let mut settings = Settings::open(dir.join("config.toml"), dir.join("state.db"));
+        settings.add_workspace();
+        settings.add_workspace();
+        settings.remove_workspace(0);
+        assert_eq!(settings.workspaces.len(), 1);
+        settings.add_rule();
+        settings.remove_rule(0);
+        assert!(settings.rules.is_empty());
+        settings.remove_rule(9); // out of range: no effect, no panic
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn form_does_not_load_text_it_cannot_parse() {
+        let dir = temp_dir("form-bad");
+        let mut settings = Settings::open(dir.join("config.toml"), dir.join("state.db"));
+        settings.add_workspace();
+        settings.text = "this is = not [valid toml".into();
+        settings.load_form();
+        assert_eq!(settings.workspaces.len(), 1, "form kept its fields");
+        assert!(settings.message.unwrap().0);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

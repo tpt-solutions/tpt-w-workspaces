@@ -20,6 +20,10 @@ usage:
   tpt-workspaces run [--config PATH] [--state PATH]
                                              run the daemon in the foreground
   tpt-workspaces autostart enable|disable|status
+  tpt-workspaces status                      show the running daemon's state
+  tpt-workspaces pause                       freeze background apps (rule-matched, other workspaces)
+  tpt-workspaces resume                      resume every app the daemon has frozen
+  tpt-workspaces --version                   print the version
 
 Logging: set RUST_LOG (for example RUST_LOG=debug). Set TPT_LOG_JSON=1 for JSON output.";
 
@@ -29,8 +33,15 @@ fn main() -> ExitCode {
         Some("check") => check(args.get(1).map(PathBuf::from)),
         Some("run") => run(&args[1..]),
         Some("autostart") => autostart::run(&args[1..]),
+        Some("status") => status(),
+        Some("pause") => send_action(tpt_workspaces_core::ipc::Request::PauseBackground, "paused"),
+        Some("resume") => send_action(tpt_workspaces_core::ipc::Request::ResumeAll, "resumed"),
         Some("-h" | "--help") => {
             println!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        Some("-V" | "--version") => {
+            println!("tpt-workspaces {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
         }
         _ => {
@@ -74,6 +85,45 @@ fn run(args: &[String]) -> Result<(), String> {
 
     init_logging();
     daemon::run(&config_path, &state_path)
+}
+
+fn status() -> Result<(), String> {
+    use tpt_workspaces_core::ipc::{request, Request, Response};
+    match request(&Request::Status)? {
+        Response::Status(status) => {
+            let active = status.active.as_deref().unwrap_or("(none)");
+            println!("active workspace: {active}");
+            println!("rules: {}", status.rules);
+            for ws in &status.workspaces {
+                let marker = if ws.active { " *" } else { "" };
+                println!("  {} ({}){marker}", ws.id, ws.name);
+            }
+            if status.paused.is_empty() {
+                println!("frozen processes: none");
+            } else {
+                println!("frozen processes:");
+                for p in &status.paused {
+                    println!("  {} (pid {})", p.executable, p.pid);
+                }
+            }
+            Ok(())
+        }
+        Response::Done { count } => Err(format!("unexpected reply: done({count})")),
+        Response::Error { message } => Err(message),
+    }
+}
+
+/// Sends a state-changing request and reports how many processes it affected.
+fn send_action(request: tpt_workspaces_core::ipc::Request, past_tense: &str) -> Result<(), String> {
+    use tpt_workspaces_core::ipc::{request as send, Response};
+    match send(&request)? {
+        Response::Done { count } => {
+            println!("{count} process(es) {past_tense}");
+            Ok(())
+        }
+        Response::Status(_) => Err("unexpected reply: status".into()),
+        Response::Error { message } => Err(message),
+    }
 }
 
 fn init_logging() {

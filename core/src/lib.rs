@@ -9,6 +9,7 @@ pub mod config;
 pub mod engine;
 pub mod ipc;
 pub mod model;
+pub mod paths;
 pub mod rules;
 pub mod storage;
 pub mod transition;

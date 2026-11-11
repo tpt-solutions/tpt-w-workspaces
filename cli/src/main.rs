@@ -5,13 +5,12 @@
 
 mod autostart;
 mod daemon;
-mod paths;
 mod platform;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use tpt_workspaces_core::config;
+use tpt_workspaces_core::{config, paths};
 use tracing_subscriber::EnvFilter;
 
 const USAGE: &str = "\

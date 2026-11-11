@@ -54,6 +54,29 @@ impl SqliteStore {
         Ok(SqliteStore { conn })
     }
 
+    /// Every saved window geometry, ordered by workspace and then executable.
+    pub fn list_geometries(&self) -> rusqlite::Result<Vec<(GeometryKey, WindowGeometry)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT workspace, executable, x, y, width, height FROM window_geometry
+             ORDER BY workspace, executable",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                GeometryKey {
+                    workspace: WorkspaceId::new(row.get::<_, String>(0)?),
+                    executable: row.get(1)?,
+                },
+                WindowGeometry {
+                    x: row.get::<_, i32>(2)?,
+                    y: row.get::<_, i32>(3)?,
+                    width: from_i64(4, row.get(4)?)?,
+                    height: from_i64(5, row.get(5)?)?,
+                },
+            ))
+        })?;
+        rows.collect()
+    }
+
     /// Schema version currently applied to the database.
     pub fn schema_version(&self) -> rusqlite::Result<usize> {
         self.conn

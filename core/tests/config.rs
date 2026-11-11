@@ -123,3 +123,37 @@ fn load_reports_missing_file() {
     let err = tpt_workspaces_core::config::load(&path).unwrap_err();
     assert!(matches!(err, ConfigError::Io { .. }));
 }
+
+#[test]
+fn save_rejects_invalid_text_and_leaves_the_file_untouched() {
+    let dir = std::env::temp_dir().join(format!("tpt-save-test-{}-a", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("config.toml");
+    std::fs::write(&path, "schema_version = 1\n").unwrap();
+
+    let bad = "[[rule]]\nworkspace = \"missing\"\nexecutable = \"x.exe\"\n";
+    assert!(tpt_workspaces_core::config::save(&path, bad).is_err());
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "schema_version = 1\n"
+    );
+    assert!(!path.with_extension("toml.tmp").exists());
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn save_replaces_the_file_when_valid() {
+    let dir = std::env::temp_dir().join(format!("tpt-save-test-{}-b", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("config.toml");
+    std::fs::write(&path, "schema_version = 1\n").unwrap();
+
+    let good = "schema_version = 1\n\n[[workspace]]\nid = \"dev\"\nname = \"Development\"\n";
+    let cfg = tpt_workspaces_core::config::save(&path, good).unwrap();
+    assert_eq!(cfg.workspaces.len(), 1);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), good);
+    assert!(!path.with_extension("toml.tmp").exists());
+
+    std::fs::remove_dir_all(&dir).ok();
+}

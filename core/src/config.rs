@@ -101,6 +101,33 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
     parse(&source)
 }
 
+/// Validates `text` and, only if it is valid, replaces the file at `path`.
+///
+/// The text is written to a temporary file next to `path` and then renamed over
+/// it, so a crash or a full disk never leaves a half-written config. The daemon's
+/// file watcher picks up the change and reloads it.
+pub fn save(path: &Path, text: &str) -> Result<Config, ConfigError> {
+    let config = parse(text)?;
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(dir).map_err(|source| ConfigError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let tmp = path.with_extension("toml.tmp");
+    let write = || -> std::io::Result<()> {
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, path)
+    };
+    write().map_err(|source| {
+        let _ = std::fs::remove_file(&tmp);
+        ConfigError::Io {
+            path: path.to_path_buf(),
+            source,
+        }
+    })?;
+    Ok(config)
+}
+
 fn validate(file: ConfigFile) -> Result<Config, ConfigError> {
     if file.schema_version > CURRENT_SCHEMA_VERSION {
         return Err(ConfigError::UnsupportedSchema {

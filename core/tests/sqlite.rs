@@ -78,3 +78,37 @@ fn reopening_a_file_database_keeps_data_and_does_not_re_migrate() {
     drop(store);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn list_geometries_returns_every_saved_entry_in_order() {
+    use tpt_workspaces_core::model::{WindowGeometry, WorkspaceId};
+    use tpt_workspaces_core::sqlite::SqliteStore;
+    use tpt_workspaces_core::storage::{GeometryKey, StateStore};
+
+    let mut store = SqliteStore::open_in_memory().unwrap();
+    let geo = |x| WindowGeometry {
+        x,
+        y: 2,
+        width: 300,
+        height: 200,
+    };
+    let key = |ws: &str, exe: &str| GeometryKey {
+        workspace: WorkspaceId::new(ws),
+        executable: exe.to_string(),
+    };
+    store
+        .save_geometry(&key("dev", "code.exe"), geo(10))
+        .unwrap();
+    store
+        .save_geometry(&key("chat", "slack.exe"), geo(20))
+        .unwrap();
+
+    let listed = store.list_geometries().unwrap();
+    assert_eq!(
+        listed,
+        vec![
+            (key("chat", "slack.exe"), geo(20)),
+            (key("dev", "code.exe"), geo(10)),
+        ]
+    );
+}

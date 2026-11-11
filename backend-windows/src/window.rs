@@ -81,8 +81,20 @@ fn describe(hwnd: HWND) -> Option<WindowInfo> {
         }
     }
 
-    let title = read_string(|buf| unsafe { GetWindowTextW(hwnd, buf) });
-    if title.is_empty() {
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+
+    // Reading another process's window text sends it a message and waits for that
+    // process's thread to answer. A frozen process never answers, so the read would
+    // block forever. Windows of frozen processes are listed without a title; rules
+    // match on executable and class, not on title.
+    let frozen = crate::process::is_frozen(pid);
+    let title = if frozen {
+        String::new()
+    } else {
+        read_string(|buf| unsafe { GetWindowTextW(hwnd, buf) })
+    };
+    if title.is_empty() && !frozen {
         return None;
     }
     let class = read_string(|buf| unsafe { GetClassNameW(hwnd, buf) });
@@ -90,8 +102,6 @@ fn describe(hwnd: HWND) -> Option<WindowInfo> {
         return None;
     }
 
-    let mut pid = 0u32;
-    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     let mut executable = executable_name(pid).unwrap_or_default();
 
     // UWP apps are hosted by ApplicationFrameHost; the real app owns a CoreWindow child.

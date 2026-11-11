@@ -8,8 +8,10 @@
 //! Resuming decrements each thread's suspend count until it reaches zero, so
 //! the operation is safe to repeat.
 
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::mem::size_of;
+use std::sync::Mutex;
 
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
@@ -26,6 +28,14 @@ use crate::window::HandleGuard;
 
 /// Processes that must never be frozen: the System Idle process and the System process.
 const PROTECTED_PIDS: &[u32] = &[0, 4];
+
+/// Processes this backend has suspended and not yet resumed.
+static FROZEN: Mutex<BTreeSet<u32>> = Mutex::new(BTreeSet::new());
+
+/// Whether this backend currently holds `pid` suspended.
+pub fn is_frozen(pid: u32) -> bool {
+    FROZEN.lock().map(|set| set.contains(&pid)).unwrap_or(false)
+}
 
 /// Whether `pid` runs with an elevated token. `None` if the token cannot be read.
 pub fn is_elevated(pid: u32) -> Option<bool> {
@@ -139,6 +149,9 @@ pub fn suspend_process(pid: u32) -> Result<usize, BackendError> {
             None => BackendError::NotFound(format!("no suspendable threads for pid {pid}")),
         });
     }
+    if let Ok(mut set) = FROZEN.lock() {
+        set.insert(pid);
+    }
     Ok(suspended)
 }
 
@@ -177,6 +190,9 @@ pub fn resume_process(pid: u32) -> Result<usize, BackendError> {
         if let Some(e) = last_error {
             return Err(BackendError::Win32(e));
         }
+    }
+    if let Ok(mut set) = FROZEN.lock() {
+        set.remove(&pid);
     }
     Ok(resumed)
 }

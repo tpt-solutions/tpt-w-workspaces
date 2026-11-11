@@ -40,6 +40,15 @@ All notable changes to tpt-workspaces are recorded here. The format follows
 - Sway: floating windows are sized before they are positioned, so the requested
   top-left corner is kept.
 
+### Fixed
+- Switching to a managed workspace no longer freezes the apps on the desktop the
+  daemon started on. That desktop is not managed, so its apps are left alone.
+- Windows of frozen apps are listed without reading their titles. Reading a
+  title waits for the owning app, which never answers while it is frozen, so the
+  daemon could stop responding.
+- The daemon logs each event it handles at debug level, and warns when one takes
+  more than two seconds.
+
 ## [0.1.0]
 
 Initial development release. Not yet suitable for daily use.

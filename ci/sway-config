@@ -1,2 +1,7 @@
 # Minimal sway config for headless CI runs. No bar, no keybindings.
 output * resolution 1280x800
+
+# Strip window decorations so the container rect matches the client area.
+# Otherwise the title bar offsets floating windows from the requested geometry.
+default_border none
+default_floating_border none

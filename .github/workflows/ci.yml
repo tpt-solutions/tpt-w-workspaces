@@ -26,6 +26,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # The gui crate's tray-icon dependency links GTK 3 and libxdo on Linux.
+      # Without these dev packages the glib-sys build script fails.
+      - name: Install Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxdo-dev
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
